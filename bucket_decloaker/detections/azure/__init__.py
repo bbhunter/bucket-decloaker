@@ -1,0 +1,1 @@
+"""Azure-specific detection modules."""

@@ -1,77 +1,103 @@
 # bucket-decloaker
-A simple tool to decloak/expose the bucket name behind a domain.
+A tool to decloak/expose the bucket name behind a domain.
 
-So... the idea here is to have a tool that will implement all the checks in these two resources:
-
+Implements all known techniques from:
 - https://gist.github.com/fransr/a155e5bd7ab11c93923ec8ce788e3368
 - https://medium.com/@localh0t/unveiling-amazon-s3-bucket-names-e1420ceaf4fa
 
-And any other for AWS/Azure/GCP or any other similar provider.
+And extends them with additional checks for AWS, GCP, Azure, DigitalOcean Spaces, Backblaze B2, Cloudflare R2, and Alibaba Cloud OSS.
 
 # Usage
 
-- Clone this repo.
-- pip3 install -r requirements.txt
-- Run.
-
 ```
-$ python3 bucket-decloaker.py -d [REDACTED].com -o [REDACTED].json
-[i] No CNAME record returned
-[!] S3 bucket FQDN found in: [REDACTED].com.s3.amazonaws.com
-[i] The match in the name of the domain and the bucket we found may be a lucky coincidence.
-[i] No S3 bucket found with url %C0 trick. 
- $ cat [REDACTED].json
-{
-    "bucket_name": "[REDACTED].com",
-    "cloudfront": null,
-    "cloudfront_name": null,
-    "provider": "aws"
-}
+pip3 install -r requirements.txt
+python3 bucket-decloaker.py -d example.com
 ```
 
-# Info / Adding a check
-
-The findings or useful information in the bucket are stored in the class "Bucket":
-
+With optional parameters:
 ```
-class Bucket:
-    def __init__(self):
-        self.provider = None
-        self.bucket_name = None
-        self.load_balancer = None
-        self.load_balancer_name = None
-        # The attribute certain can be True/False if the check is not reliable
-        self.certain = True
+python3 bucket-decloaker.py -d example.com -o results.json --aws-key AKIAIOSFODNN7EXAMPLE
 ```
 
-The checks implemented will be run by passing the domain and an object of the class Bucket:
+# Detection Techniques
 
+The tool uses a modular plugin-based architecture. Detections are auto-discovered and run in two phases: generic/multi-provider checks first, then provider-specific checks.
+
+## Generic / Multi-Provider (8 checks)
+
+| Check | Description | Confidence |
+|-------|-------------|------------|
+| **CNAME lookup** | DNS CNAME records pointing to cloud storage endpoints | HIGH |
+| **HTTP headers** | `Server: AmazonS3`, `x-goog-*`, `x-ms-*` header fingerprinting | HIGH |
+| **URL %C0 trick** | Trigger S3 error via `%C0` character to leak bucket name | HIGH |
+| **Direct URL check** | Check if domain-named bucket exists on S3/GCP | LOW |
+| **TLS certificate** | Inspect certificate SAN/CN for cloud storage patterns | MEDIUM |
+| **IP range lookup** | Check resolved IP against published AWS/GCP/Azure IP ranges | LOW |
+| **Error page fingerprint** | Pattern-match provider-specific error pages | MEDIUM |
+| **S3-compatible check** | Check domain-named buckets on DO Spaces, Backblaze, Alibaba OSS | LOW |
+
+## AWS S3 (7 checks)
+
+| Check | Description | Confidence |
+|-------|-------------|------------|
+| **Signing error** | Trigger signing error with AWS key to extract bucket name | HIGH |
+| **ACL endpoint** | `?acl` endpoint to extract owner ID or confirm S3 | HIGH |
+| **Bucket region** | `x-amz-bucket-region` header discovery | HIGH |
+| **SOAP endpoint** | Check for S3-specific SOAP endpoint response | HIGH |
+| **Bucket listing** | Extract bucket name from XML listing response | HIGH |
+| **Torrent metadata** | Extract `x-amz-bucket` from torrent file metadata | HIGH |
+| **Unicode error** | Trigger error with unicode characters (experimental) | LOW |
+
+## GCP Storage (3 checks)
+
+| Check | Description | Confidence |
+|-------|-------------|------------|
+| **Signature error** | Fake `GoogleAccessId` signature to leak bucket name (HTTPS + HTTP) | HIGH |
+| **Permission errors** | Extract bucket name from IAM permission error messages | HIGH |
+| **alt=json trick** | `?alt=json` parameter to trigger JSON error responses | HIGH |
+
+## Azure Blob Storage (2 checks)
+
+| Check | Description | Confidence |
+|-------|-------------|------------|
+| **comp=list parameter** | Trigger Azure error via `?comp=list` to extract container name | HIGH |
+| **restype=container** | Trigger Azure error via `?restype=container` | HIGH |
+
+## Supported Providers
+
+- Amazon Web Services (S3, CloudFront)
+- Google Cloud Platform (Cloud Storage)
+- Microsoft Azure (Blob Storage, CDN)
+- DigitalOcean Spaces
+- Backblaze B2
+- Cloudflare R2
+- Alibaba Cloud OSS
+
+# Adding a Detection
+
+Create a new Python file in the appropriate `bucket_decloaker/detections/<provider>/` directory:
+
+```python
+from typing import Optional, Dict, Any
+from bucket_decloaker.core import Provider, Confidence, DetectionResult
+from bucket_decloaker.detections.base import Detection
+
+class MyDetection(Detection):
+    name = "my_check"
+    description = "What this check does"
+    providers = [Provider.AWS]
+    confidence = Confidence.HIGH
+
+    def check(self, domain: str, context: Optional[Dict[str, Any]] = None) -> DetectionResult:
+        # Your detection logic here
+        return self._success(
+            provider=Provider.AWS,
+            bucket_name="found-bucket",
+            message="Description of finding",
+        )
 ```
-bucket = Bucket()
-(...)
-yourcustom_check(args.domain, bucket)
-```
 
-That custom check may change properties on the bucket that will reflect the information obtained from it. For example:
-
-```
-def yourcustom_check(domain, bucket):
-    // Do your magic here
-    bucket.provider = "gcp"
-    bucket.bucket_name = "supersecretbucket-123"
-    return
-```
-
-# To Do
-
-- [x] Create a simple script that will try to guess the bucket from a domain name
-- [ ] Implement GCP buckets checks
-- [ ] Implement Azure buckets checks
-- [ ] Add the method used to fingerprint the bucket in the results
-- [ ] Implement @fransrosen's script checks (link above)
-- [ ] Timeout for functions
-- [ ] Add more files to be checked in the "torrent" trick (now only checking for `index.html?torrent`)
-- [ ] Force "in code" the list of providers that can be set ["aws","gcp","azure"]
+The detection will be auto-discovered — no registration needed.
 
 # Disclaimer
 

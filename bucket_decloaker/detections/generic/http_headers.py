@@ -16,13 +16,14 @@ class HTTPHeadersDetection(Detection):
 
     name = "http_headers"
     description = "Check HTTP response headers for cloud storage provider indicators"
-    providers = [Provider.AWS, Provider.GENERIC]
+    providers = [Provider.AWS, Provider.GCP, Provider.AZURE, Provider.GENERIC]
     confidence = Confidence.HIGH
 
     def check(self, domain: str, context: Optional[Dict[str, Any]] = None) -> DetectionResult:
         try:
             r = requests.get(f'https://{domain}/', verify=False, timeout=10)
-            server_header = r.headers.get('Server', '')
+            headers = r.headers
+            server_header = headers.get('Server', '')
 
             # AWS S3
             if 'AmazonS3' in server_header:
@@ -31,7 +32,23 @@ class HTTPHeadersDetection(Detection):
                     message=f"Server header indicates S3: {server_header}",
                 )
 
-            # Could add more header checks here for other providers
+            # GCP Storage — x-goog-* headers
+            gcp_headers = [k for k in headers if k.lower().startswith('x-goog-')]
+            if gcp_headers:
+                details = ', '.join(f'{h}: {headers[h]}' for h in gcp_headers[:5])
+                return self._success(
+                    provider=Provider.GCP,
+                    message=f"GCP headers detected: {details}",
+                )
+
+            # Azure Blob Storage — x-ms-* headers
+            azure_headers = [k for k in headers if k.lower().startswith('x-ms-')]
+            if azure_headers:
+                details = ', '.join(f'{h}: {headers[h]}' for h in azure_headers[:5])
+                return self._success(
+                    provider=Provider.AZURE,
+                    message=f"Azure headers detected: {details}",
+                )
 
             return self._failure("No cloud storage headers found")
 

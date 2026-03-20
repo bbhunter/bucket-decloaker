@@ -10,6 +10,10 @@ class Provider(Enum):
     AWS = "aws"
     GCP = "gcp"
     AZURE = "azure"
+    DIGITALOCEAN = "digitalocean"
+    BACKBLAZE = "backblaze"
+    CLOUDFLARE = "cloudflare"
+    ALIBABA = "alibaba"
     GENERIC = "generic"
 
 

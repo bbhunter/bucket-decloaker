@@ -14,7 +14,7 @@ class CNAMEDetection(Detection):
 
     name = "cname_check"
     description = "Check CNAME records for cloud storage provider indicators"
-    providers = [Provider.AWS, Provider.GCP, Provider.AZURE, Provider.GENERIC]
+    providers = [Provider.AWS, Provider.GCP, Provider.AZURE, Provider.DIGITALOCEAN, Provider.BACKBLAZE, Provider.CLOUDFLARE, Provider.ALIBABA, Provider.GENERIC]
     confidence = Confidence.HIGH
 
     def check(self, domain: str, context: Optional[Dict[str, Any]] = None) -> DetectionResult:
@@ -67,6 +67,38 @@ class CNAMEDetection(Detection):
                         provider=Provider.AZURE,
                         bucket_name=domain,
                         message=f"CNAME points to Azure Blob: {target}",
+                    )
+
+                # DigitalOcean Spaces
+                do_pattern = re.compile(r".*\.digitaloceanspaces\.com")
+                if do_pattern.search(target):
+                    return self._success(
+                        provider=Provider.DIGITALOCEAN,
+                        message=f"CNAME points to DigitalOcean Spaces: {target}",
+                    )
+
+                # Backblaze B2
+                b2_pattern = re.compile(r".*\.backblazeb2\.com")
+                if b2_pattern.search(target):
+                    return self._success(
+                        provider=Provider.BACKBLAZE,
+                        message=f"CNAME points to Backblaze B2: {target}",
+                    )
+
+                # Cloudflare R2
+                r2_pattern = re.compile(r".*\.r2\.cloudflarestorage\.com")
+                if r2_pattern.search(target):
+                    return self._success(
+                        provider=Provider.CLOUDFLARE,
+                        message=f"CNAME points to Cloudflare R2: {target}",
+                    )
+
+                # Alibaba Cloud OSS
+                oss_pattern = re.compile(r".*\.aliyuncs\.com")
+                if oss_pattern.search(target):
+                    return self._success(
+                        provider=Provider.ALIBABA,
+                        message=f"CNAME points to Alibaba Cloud OSS: {target}",
                     )
 
             return self._failure("No cloud storage CNAME found")

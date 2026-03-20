@@ -18,8 +18,8 @@ def discover_detections() -> List[Type[Detection]]:
     detections = []
     package_dir = Path(__file__).parent
 
-    # Walk through all subpackages (generic, aws, gcp, azure)
-    for subdir in ['generic', 'aws', 'gcp', 'azure']:
+    # Walk through all subpackages
+    for subdir in ['generic', 'aws', 'gcp', 'azure', 'digitalocean', 'backblaze', 'cloudflare', 'alibaba']:
         subdir_path = package_dir / subdir
         if not subdir_path.is_dir():
             continue

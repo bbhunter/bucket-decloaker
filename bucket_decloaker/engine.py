@@ -138,15 +138,19 @@ class DetectionEngine:
             return [result.provider]
 
         # If provider is detected but uncertain, check that provider plus others
+        all_providers = [
+            Provider.AWS, Provider.GCP, Provider.AZURE,
+            Provider.DIGITALOCEAN, Provider.BACKBLAZE, Provider.CLOUDFLARE, Provider.ALIBABA,
+        ]
         if result.provider:
             providers = [result.provider]
-            for p in [Provider.AWS, Provider.GCP, Provider.AZURE]:
+            for p in all_providers:
                 if p not in providers:
                     providers.append(p)
             return providers
 
         # No provider detected - check all
-        return [Provider.AWS, Provider.GCP, Provider.AZURE]
+        return all_providers
 
     def _merge_result(self, scan_result: ScanResult, detection_result: DetectionResult) -> None:
         """Merge a detection result into the scan result."""
